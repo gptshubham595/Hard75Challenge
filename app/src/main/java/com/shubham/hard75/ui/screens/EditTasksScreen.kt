@@ -1,16 +1,19 @@
 package com.shubham.hard75.ui.screens
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -35,35 +38,36 @@ import com.shubham.hard75.model.Task
 import com.shubham.hard75.ui.viewmodel.ChallengeViewModel
 import org.koin.androidx.compose.koinViewModel
 
+
 @Composable
 fun EditTasksScreenRoot(
     onNavigateBack: () -> Unit,
-    viewModel: ChallengeViewModel = koinViewModel(),
+    viewModel: ChallengeViewModel = koinViewModel()
 ) {
-    val tasks by viewModel.taskList.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
 
     EditTasksScreen(
-        onNavigateBack = onNavigateBack,
-        tasks = tasks,
-        onAddTask = viewModel::addTask,
-        onDeleteTask = viewModel::deleteTask
+        taskList = uiState.taskList.filter { it.id != "selfie" }, // Exclude the static selfie task
+        onAddTask = { taskName -> viewModel.addTask(taskName) },
+        onDeleteTask = { task -> viewModel.deleteTask(task) },
+        onNavigateBack = onNavigateBack
     )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditTasksScreen(
-    onNavigateBack: () -> Unit,
-    tasks: List<Task>,
+    taskList: List<Task>,
     onAddTask: (String) -> Unit,
-    onDeleteTask: (Task) -> Unit
+    onDeleteTask: (Task) -> Unit,
+    onNavigateBack: () -> Unit
 ) {
     var newTaskName by remember { mutableStateOf("") }
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("Edit Your Tasks") },
+                title = { Text("Edit Tasks") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -78,21 +82,9 @@ fun EditTasksScreen(
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
-            // List of existing tasks
-            LazyColumn(modifier = Modifier.weight(1f)) {
-                items(tasks) { task ->
-                    TaskItem(
-                        task = task,
-                        onDelete = { onDeleteTask(task) }
-                    )
-                }
-            }
-
-            // Input for adding a new task
+            // Input field for adding a new task
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 16.dp),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 OutlinedTextField(
@@ -106,37 +98,38 @@ fun EditTasksScreen(
                     onClick = {
                         if (newTaskName.isNotBlank()) {
                             onAddTask(newTaskName)
-                            newTaskName = "" // Clear the text field
+                            newTaskName = "" // Clear the input field
                         }
                     },
                     enabled = newTaskName.isNotBlank()
                 ) {
-                    Text("Add")
+                    Icon(Icons.Default.Add, contentDescription = "Add Task")
                 }
             }
-        }
-    }
-}
 
-@Composable
-private fun TaskItem(task: Task, onDelete: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = task.name,
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyLarge
-        )
-        IconButton(onClick = onDelete) {
-            Icon(
-                Icons.Default.Delete,
-                contentDescription = "Delete Task",
-                tint = MaterialTheme.colorScheme.error
-            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // List of existing tasks
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(taskList, key = { it.id }) { task ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = task.name,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = { onDeleteTask(task) }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete Task")
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -146,15 +139,31 @@ private fun TaskItem(task: Task, onDelete: () -> Unit) {
 @Composable
 fun EditTasksScreenPreview() {
     val sampleTasks = listOf(
-        Task(id = "1", name = "Workout for 45 minutes"),
-        Task(id = "2", name = "Drink 1 gallon of water"),
-        Task(id = "3", name = "Read 10 pages of a book")
+        Task(id = "1", name = "Drink 1 gallon of water"),
+        Task(id = "2", name = "Follow a diet"),
+        Task(id = "3", name = "Read 10 pages of a book"),
+        Task(id = "4", name = "45-minute outdoor workout")
     )
 
-    EditTasksScreen(
-        onNavigateBack = {},
-        tasks = sampleTasks,
-        onAddTask = {},
-        onDeleteTask = {}
-    )
+    MaterialTheme {
+        EditTasksScreen(
+            taskList = sampleTasks,
+            onAddTask = {},
+            onDeleteTask = {},
+            onNavigateBack = {}
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun EditTasksScreenEmptyPreview() {
+    MaterialTheme {
+        EditTasksScreen(
+            taskList = emptyList(),
+            onAddTask = {},
+            onDeleteTask = {},
+            onNavigateBack = {}
+        )
+    }
 }

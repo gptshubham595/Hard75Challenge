@@ -36,6 +36,8 @@ firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
 firebase-auth = { module = "com.google.firebase:firebase-auth", version.ref = "firebaseAuth" }
 firebase-auth-ktx = { module = "com.google.firebase:firebase-auth-ktx", version="23.2.1" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
+firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics" }
+firebase-crashlytics-ndk = { module = "com.google.firebase:firebase-crashlytics-ndk" }
 firebase-firestore = { module = "com.google.firebase:firebase-firestore", version.ref = "firebaseFirestore" }
 firebase-firestore-ktx = { module = "com.google.firebase:firebase-firestore-ktx" , version = "25.1.4" }
 googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version = "1.1.1" }
@@ -67,5 +69,6 @@ android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
-google-gms-services = { id = "com.google.gms.google-services", version = "4.4.3" }
+google-gms-services = { id = "com.google.gms.google-services", version = "4.4.4" }
+firebase-crashlytics = { id = "com.google.firebase.crashlytics", version = "3.0.6" }
 room = { id = "androidx.room", version.ref = "roomKtx" }

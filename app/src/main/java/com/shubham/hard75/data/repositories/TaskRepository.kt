@@ -5,10 +5,14 @@ import androidx.core.content.edit
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.shubham.hard75.model.Task
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 private const val TASKS_KEY = "user_tasks_list"
@@ -30,42 +34,64 @@ class TaskRepository(
     )
 
     private val _taskList = MutableStateFlow<List<Task>>(emptyList())
-    val taskList: StateFlow<List<Task>> = _taskList.asStateFlow()
 
     init {
+        // Load initial tasks from storage
         loadTasks()
     }
 
+    /**
+     * Exposes the current list of tasks as a Flow that the UI can observe.
+     */
+    fun getAllTasks(): Flow<List<Task>> = _taskList.asStateFlow()
+
+    /**
+     * Adds a new task to the user's list and saves it.
+     */
+    suspend fun addTask(taskName: String) {
+        val newTask = Task(id = UUID.randomUUID().toString(), name = taskName)
+        _taskList.update { it + newTask }
+        saveTasks()
+    }
+
+    /**
+     * Deletes a task from the user's list and saves the changes.
+     */
+    suspend fun deleteTask(task: Task) {
+        _taskList.update { it.filterNot { it.id == task.id } }
+        saveTasks()
+    }
+
+    /**
+     * Loads the task list from SharedPreferences. If no tasks are saved,
+     * it initializes the list with default tasks.
+     */
     private fun loadTasks() {
         val tasksJson = sharedPreferences.getString(TASKS_KEY, null)
         if (tasksJson != null) {
             val type = object : TypeToken<List<Task>>() {}.type
-            _taskList.update {
-                gson.fromJson(tasksJson, type)
-            }
+            _taskList.update { gson.fromJson(tasksJson, type) }
         } else {
-            // First launch, save default tasks
+            // This is the first launch, so load and save the default tasks
             _taskList.update { defaultTasks }
-            saveTasks()
+            // Launch a coroutine to save without blocking the init block
+            CoroutineScope(Dispatchers.IO).launch { saveTasks() }
         }
     }
 
-    fun addTask(taskName: String) {
-        val newTask = Task(id = UUID.randomUUID().toString(), name = taskName)
-        _taskList.value = _taskList.value + newTask
-        saveTasks()
-    }
-
-    fun deleteTask(task: Task) {
-        _taskList.value = _taskList.value.filterNot { it.id == task.id }
-        saveTasks()
-    }
-
-    private fun saveTasks() {
+    /**
+     * Saves the current task list to SharedPreferences as a JSON string.
+     * This is a suspend function to ensure file I/O is done off the main thread.
+     */
+    private suspend fun saveTasks() = withContext(Dispatchers.IO) {
         val tasksJson = gson.toJson(_taskList.value)
         sharedPreferences.edit {
             putString(TASKS_KEY, tasksJson)
-            apply()
         }
     }
+
+    companion object {
+        private const val TASKS_KEY = "user_tasks_list"
+    }
 }
+

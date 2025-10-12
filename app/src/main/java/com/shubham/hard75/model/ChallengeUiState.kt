@@ -5,8 +5,8 @@ import java.time.LocalDate
 
 data class ChallengeUiState(
     val days: List<ChallengeDay> = emptyList(),
+    val taskList: List<Task> = emptyList(),
     val currentDayNumber: Int = 1,
-    val challengeStartDate: LocalDate? = null,
     val isChallengeActive: Boolean = false,
     val hasFailed: Boolean = false,
     val userPhotoUrl: String? = null

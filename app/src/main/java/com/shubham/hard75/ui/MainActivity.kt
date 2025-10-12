@@ -12,15 +12,15 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.google.firebase.Firebase
 import com.google.firebase.FirebaseApp
+import com.google.firebase.auth.auth
 import com.shubham.hard75.ui.screens.ChallengeScreenRoot
-import com.shubham.hard75.ui.screens.EditTasksScreen
 import com.shubham.hard75.ui.screens.EditTasksScreenRoot
-import com.shubham.hard75.ui.screens.LeaderboardScreen
+import com.shubham.hard75.ui.screens.GalleryScreenRoot
 import com.shubham.hard75.ui.screens.LeaderboardScreenRoot
 import com.shubham.hard75.ui.screens.LoginScreenRoot
 import com.shubham.hard75.ui.theme.Hard75Theme
-import org.koin.androidx.compose.koinViewModel
 
 class MainActivity : ComponentActivity() {
 
@@ -44,13 +44,20 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
-    NavHost(navController = navController, startDestination = "login") {
+
+    // Key Fix: Check if a user is already signed in.
+    val startDestination = if (Firebase.auth.currentUser != null) {
+        "challenge" // If user exists, go straight to the main screen
+    } else {
+        "login" // Otherwise, show the login screen
+    }
+
+    NavHost(navController = navController, startDestination = startDestination) {
         composable("login") {
             LoginScreenRoot(
-                authViewModel = koinViewModel(),
                 onLoginSuccess = {
+                    // After successful login, navigate to challenge and clear the back stack
                     navController.navigate("challenge") {
-                        // Clear the back stack so the user can't go back to the login screen
                         popUpTo("login") { inclusive = true }
                     }
                 }
@@ -59,7 +66,8 @@ fun AppNavigation() {
         composable("challenge") {
             ChallengeScreenRoot(
                 onNavigateToLeaderboard = { navController.navigate("leaderboard") },
-                onNavigateToEditTasks = { navController.navigate("edit_tasks") }
+                onNavigateToEditTasks = { navController.navigate("edit_tasks") },
+                onNavigateToGallery = { navController.navigate("gallery") }
             )
         }
         composable("leaderboard") {
@@ -69,8 +77,12 @@ fun AppNavigation() {
         }
         composable("edit_tasks") {
             EditTasksScreenRoot(
-                onNavigateBack = { navController.popBackStack() },
-                viewModel = koinViewModel() // ChallengeViewModel also manages tasks
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable("gallery") {
+            GalleryScreenRoot(
+                onNavigateBack = { navController.popBackStack() }
             )
         }
     }

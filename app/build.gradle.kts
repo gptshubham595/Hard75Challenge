@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.google.gms.services)
     alias(libs.plugins.ksp)
     alias(libs.plugins.room)
+    alias(libs.plugins.firebase.crashlytics)
 }
 
 android {
@@ -93,6 +94,8 @@ dependencies {
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
+    implementation(libs.firebase.crashlytics)
+    implementation(libs.firebase.crashlytics.ndk)
 
     // ADD THESE LINES for Koin
     implementation(libs.koin.android)

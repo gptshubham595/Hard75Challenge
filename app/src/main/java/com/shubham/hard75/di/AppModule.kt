@@ -11,6 +11,7 @@ import com.shubham.hard75.data.repositories.ChallengeRepository
 import com.shubham.hard75.data.repositories.TaskRepository
 import com.shubham.hard75.ui.viewmodel.AuthViewModel
 import com.shubham.hard75.ui.viewmodel.ChallengeViewModel
+import com.shubham.hard75.ui.viewmodel.GalleryViewModel
 import com.shubham.hard75.ui.viewmodel.LeaderboardViewModel
 import org.koin.android.ext.koin.androidApplication
 import org.koin.android.ext.koin.androidContext
@@ -41,5 +42,6 @@ val appModule = module {
     viewModelOf(::ChallengeViewModel)
     viewModelOf(::LeaderboardViewModel)
     viewModelOf(::AuthViewModel)
+    viewModelOf(::GalleryViewModel)
 }
 

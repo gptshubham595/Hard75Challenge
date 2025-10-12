@@ -6,7 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.shubham.hard75.data.db.entities.ChallengeDay
 
-@Database(entities = [ChallengeDay::class], version = 1, exportSchema = false)
+@Database(entities = [ChallengeDay::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun challengeDao(): ChallengeDao
@@ -23,7 +23,10 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "75_hard_challenge_database"
-                ).build()
+                )
+                    .fallbackToDestructiveMigration(true)
+                    .build()
+
                 INSTANCE = instance
                 instance
             }
