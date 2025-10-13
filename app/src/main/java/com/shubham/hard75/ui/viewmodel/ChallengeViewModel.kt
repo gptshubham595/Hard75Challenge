@@ -1,10 +1,12 @@
 package com.shubham.hard75.ui.viewmodel
 
-
-import android.content.Context
+import android.app.Application
 import android.graphics.Bitmap
 import android.net.Uri
 import android.util.Log
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
@@ -19,31 +21,34 @@ import com.shubham.hard75.model.Task
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
+import java.time.Instant
 import java.time.LocalDate
-import java.time.temporal.ChronoUnit
+import java.time.ZoneId
 import java.util.UUID
-
 
 class ChallengeViewModel(
     private val challengeRepository: ChallengeRepository,
     private val taskRepository: TaskRepository,
     private val firestore: FirebaseFirestore,
-    private val auth: FirebaseAuth
-) : ViewModel() {
+    private val auth: FirebaseAuth,
+    private val application: Application
+) : ViewModel(), DefaultLifecycleObserver {
 
     private val _uiState = MutableStateFlow(ChallengeUiState())
     val uiState: StateFlow<ChallengeUiState> = _uiState.asStateFlow()
 
     init {
+        ProcessLifecycleOwner.get().lifecycle.addObserver(this)
+
         val currentUser = auth.currentUser
         _uiState.update { it.copy(userPhotoUrl = currentUser?.photoUrl?.toString()) }
 
@@ -85,57 +90,108 @@ class ChallengeViewModel(
         viewModelScope.launch { taskRepository.deleteTask(task) }
     }
 
-    // --- Selfie Management ---
-    fun saveSelfieLocally(context: Context, bitmap: Bitmap, note: String?) {
-        viewModelScope.launch {
-            val currentDay = _uiState.value.currentDayNumber
-            val dayData = challengeRepository.getDay(currentDay) ?: return@launch
-            val filename = "day_${currentDay}_${UUID.randomUUID()}.jpg"
-            val file = File(context.filesDir, filename)
+    override fun onResume(owner: LifecycleOwner) {
+        super.onResume(owner)
+        if (_uiState.value.isChallengeActive) {
+            checkDailyStatus()
+        }
+    }
 
-            try {
-                FileOutputStream(file).use { fos ->
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 80, fos)
+    // --- The Core Daily Status Check (New Logic) ---
+
+    private fun checkDailyStatus() {
+        viewModelScope.launch {
+            val latestDay = challengeRepository.getLatestUpdatedDay() ?: return@launch
+            val lastTimestamp = latestDay.timestamp ?: return@launch
+
+            // Convert the timestamp to a calendar date in the user's timezone
+            val lastDayDate = Instant.ofEpochMilli(lastTimestamp)
+                .atZone(ZoneId.systemDefault())
+                .toLocalDate()
+
+            val today = LocalDate.now()
+
+            // Case 1: Still the same calendar day.
+            if (today.isEqual(lastDayDate)) {
+                _uiState.update { it.copy(currentDayNumber = latestDay.dayNumber) }
+                return@launch
+            }
+
+            // Case 2: It's the very next day.
+            if (today.isEqual(lastDayDate.plusDays(1))) {
+                if (latestDay.status == DayStatus.COMPLETED) {
+                    // Success! Unlock the next day.
+                    val nextDayNumber = latestDay.dayNumber + 1
+                    if (nextDayNumber > 75) return@launch // Challenge finished
+
+                    val nextDay = challengeRepository.getDay(nextDayNumber)
+                    if (nextDay != null && nextDay.status == DayStatus.LOCKED) {
+                        val unlockedNextDay = nextDay.copy(
+                            status = DayStatus.FAILED, // Start as red
+                            timestamp = System.currentTimeMillis() // Set today's timestamp
+                        )
+                        challengeRepository.upsertDay(unlockedNextDay)
+                        _uiState.update { it.copy(currentDayNumber = nextDayNumber) }
+                    }
+                } else {
+                    // Failed to complete yesterday's tasks.
+                    challengeRepository.upsertDay(latestDay.copy(status = DayStatus.FAILED))
+                    _uiState.update { it.copy(hasFailed = true) }
                 }
-                val localUri = Uri.fromFile(file).toString()
-                val updatedDay = dayData.copy(
-                    selfieImageUrl = localUri,
-                    selfieNote = note,
-                    timestamp = System.currentTimeMillis()
-                )
-                challengeRepository.upsertDay(updatedDay)
-                val updatedTaskIds = dayData.completedTaskIds.toMutableList().apply {
-                    if (!contains("selfie")) add("selfie")
+                return@launch
+            }
+
+            // Case 3: More than one day has passed. You missed a day.
+            if (today.isAfter(lastDayDate.plusDays(1))) {
+                // Mark the last day as failed for clarity in the calendar
+                if (latestDay.status != DayStatus.COMPLETED) {
+                    challengeRepository.upsertDay(latestDay.copy(status = DayStatus.FAILED))
                 }
-                updateTasksForCurrentDay(updatedTaskIds)
-            } catch (e: Exception) {
-                Log.e("ChallengeViewModel", "Failed to save selfie locally", e)
+                _uiState.update { it.copy(hasFailed = true) }
             }
         }
     }
 
-    // --- Challenge & Attempt Logic ---
+    // --- Challenge & Attempt Logic (No changes needed here) ---
+
     fun startChallenge() {
-        startNewAttempt(isFirstEverAttempt = true)
-    }
-
-    fun startNewAttempt(isFirstEverAttempt: Boolean = false) {
         viewModelScope.launch {
-            if (!isFirstEverAttempt) {
-                challengeRepository.startNewAttempt()
-            }
-            val newAttemptNumber = challengeRepository.getCurrentAttemptNumber()
-            val initialDays = (1..75).map { dayNum ->
-                ChallengeDay(
-                    attemptNumber = newAttemptNumber,
-                    dayNumber = dayNum,
-                    status = if (dayNum == 1) DayStatus.FAILED else DayStatus.LOCKED,
-                    totalTasks = _uiState.value.taskList.size
-                )
-            }
-            initialDays.forEach { challengeRepository.upsertDay(it) }
+            initializeDaysForNewAttempt()
         }
     }
+
+    fun startNewAttempt() {
+        viewModelScope.launch {
+            challengeRepository.startNewAttempt()
+            initializeDaysForNewAttempt()
+        }
+    }
+
+    private suspend fun initializeDaysForNewAttempt() {
+        val newAttemptNumber = challengeRepository.getCurrentAttemptNumber()
+        val totalTasks = taskRepository.getAllTasks().first().size
+        val day1 = ChallengeDay(
+            attemptNumber = newAttemptNumber,
+            dayNumber = 1,
+            status = DayStatus.FAILED,
+            totalTasks = totalTasks,
+            timestamp = System.currentTimeMillis()
+        )
+        challengeRepository.upsertDay(day1)
+
+        val futureDays = (2..75).map { dayNum ->
+            ChallengeDay(
+                attemptNumber = newAttemptNumber,
+                dayNumber = dayNum,
+                status = DayStatus.LOCKED,
+                totalTasks = totalTasks,
+                timestamp = null
+            )
+        }
+        futureDays.forEach { challengeRepository.upsertDay(it) }
+    }
+
+    // --- Task and Selfie Updates (No changes needed here) ---
 
     fun updateTasksForCurrentDay(completedIds: List<String>) {
         viewModelScope.launch {
@@ -143,47 +199,56 @@ class ChallengeViewModel(
             val dayToUpdate = challengeRepository.getDay(currentDayNumber) ?: return@launch
             val totalTasks = _uiState.value.taskList.size
             val newStatus = when {
-                completedIds.isEmpty() -> DayStatus.FAILED
-                completedIds.size < totalTasks -> DayStatus.IN_PROGRESS
-                else -> DayStatus.COMPLETED
+                completedIds.size == totalTasks -> DayStatus.COMPLETED
+                completedIds.isNotEmpty() -> DayStatus.IN_PROGRESS
+                else -> DayStatus.FAILED
             }
             val newScore = when (newStatus) {
                 DayStatus.COMPLETED -> 10
-                DayStatus.IN_PROGRESS -> completedIds.size
+                DayStatus.IN_PROGRESS -> completedIds.count { it != "selfie" }
                 else -> 0
             }
             val updatedDay = dayToUpdate.copy(
                 status = newStatus,
                 score = newScore,
                 completedTaskIds = completedIds,
-                totalTasks = totalTasks
+                totalTasks = totalTasks,
+                timestamp = System.currentTimeMillis()
             )
             challengeRepository.upsertDay(updatedDay)
+
             if (currentDayNumber == 75 && newStatus == DayStatus.COMPLETED) {
                 completeChallenge()
             }
         }
     }
 
-    private fun checkDailyStatus() {
-        val startDate = challengeRepository.getStartDateForCurrentAttempt() ?: return
-        val today = LocalDate.now()
-        val daysPassed = ChronoUnit.DAYS.between(startDate, today).toInt() + 1
-        if (daysPassed > 75 || daysPassed < 1) return
-
-        if (_uiState.value.currentDayNumber != daysPassed) {
-            _uiState.update { it.copy(currentDayNumber = daysPassed) }
-        }
-
+    fun saveSelfieLocally(bitmap: Bitmap, note: String?) {
         viewModelScope.launch {
-            val yesterdayData = challengeRepository.getDay(daysPassed - 1)
-            if (yesterdayData != null && yesterdayData.status != DayStatus.COMPLETED) {
-                _uiState.update { it.copy(hasFailed = true) }
-                return@launch
-            }
-            val todayData = challengeRepository.getDay(daysPassed)
-            if (todayData != null && todayData.status == DayStatus.LOCKED) {
-                challengeRepository.upsertDay(todayData.copy(status = DayStatus.FAILED))
+            val currentDay = _uiState.value.currentDayNumber
+            val dayData = challengeRepository.getDay(currentDay) ?: return@launch
+            val filename = "day_${currentDay}_${UUID.randomUUID()}.jpg"
+            val file = File(application.filesDir, filename)
+
+            try {
+                FileOutputStream(file).use { fos ->
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 100, fos)
+                }
+                val localUri = Uri.fromFile(file).toString()
+
+                val updatedDay = dayData.copy(
+                    selfieImageUrl = localUri,
+                    selfieNote = note,
+                    timestamp = System.currentTimeMillis()
+                )
+                challengeRepository.upsertDay(updatedDay)
+
+                val updatedTaskIds = dayData.completedTaskIds.toMutableList().apply {
+                    if (!contains("selfie")) add("selfie")
+                }
+                updateTasksForCurrentDay(updatedTaskIds)
+            } catch (e: Exception) {
+                Log.e("ChallengeViewModel", "Failed to save selfie locally", e)
             }
         }
     }
@@ -206,5 +271,9 @@ class ChallengeViewModel(
         _uiState.update { it.copy(hasFailed = false) }
         startNewAttempt()
     }
-}
 
+    override fun onCleared() {
+        super.onCleared()
+        ProcessLifecycleOwner.get().lifecycle.removeObserver(this)
+    }
+}

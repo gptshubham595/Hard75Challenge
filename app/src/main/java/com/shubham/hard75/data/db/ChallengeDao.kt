@@ -35,6 +35,14 @@ interface ChallengeDao {
     suspend fun getDayForAttempt(attemptNumber: Int, dayNumber: Int): ChallengeDay?
 
     /**
+     * Retrieves the most recently updated day for an attempt.
+     * This is the key to determining the user's current position and checking for failures.
+     */
+    @Query("SELECT * FROM challenge_days WHERE attemptNumber = :attemptNumber AND timestamp IS NOT NULL ORDER BY timestamp DESC LIMIT 1")
+    suspend fun getLatestUpdatedDayForAttempt(attemptNumber: Int): ChallengeDay?
+
+
+    /**
      * Retrieves a flow of all days from all attempts.
      * This is useful for the Gallery screen to show a complete history.
      */

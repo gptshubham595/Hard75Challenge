@@ -6,16 +6,6 @@ import androidx.room.TypeConverters
 import com.shubham.hard75.data.db.converters.StringListConverter
 
 /**
- * Represents the state of a single day in the 75 Hard challenge.
- *
- * @param dayNumber The day of the challenge (1-75).
- * @param status The current status of the day (Locked, Failed, In Progress, Completed).
- * @param completedTasks A bitmask representing which tasks are completed.
- * @param score The points earned for this day.
- */
-
-
-/**
  * Represents a single day in a specific challenge attempt.
  * The combination of attemptNumber and dayNumber creates a unique primary key.
  *

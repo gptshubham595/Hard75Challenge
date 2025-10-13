@@ -7,10 +7,6 @@ import com.shubham.hard75.data.db.entities.ChallengeDay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
-
 
 /**
  * Repository class that abstracts access to the data source.
@@ -32,6 +28,15 @@ class ChallengeRepository(
         val currentAttempt = prefs.getInt(ATTEMPT_KEY, 1)
         return dao.getDaysForAttempt(currentAttempt)
     }
+
+    /**
+     * Fetches the most recently updated day from the database for the current attempt.
+     */
+    suspend fun getLatestUpdatedDay(): ChallengeDay? {
+        val currentAttempt = getCurrentAttemptNumber()
+        return dao.getLatestUpdatedDayForAttempt(currentAttempt)
+    }
+
 
     /**
      * Retrieves a flow of all days from all attempts.
@@ -64,31 +69,17 @@ class ChallengeRepository(
     }
 
     /**
-     * Increments the attempt number in SharedPreferences and saves the start date for the new attempt.
+     * Increments the attempt number in SharedPreferences.
      */
     suspend fun startNewAttempt() = withContext(Dispatchers.IO) {
         val newAttempt = getCurrentAttemptNumber() + 1
         prefs.edit {
             putInt(ATTEMPT_KEY, newAttempt)
-            putLong(getStartDateKey(newAttempt), System.currentTimeMillis())
         }
     }
 
-    /**
-     * Retrieves the start date for the current attempt from SharedPreferences.
-     */
-    fun getStartDateForCurrentAttempt(): LocalDate? {
-        val currentAttempt = prefs.getInt(ATTEMPT_KEY, 1)
-        val timestamp = prefs.getLong(getStartDateKey(currentAttempt), 0L)
-        return if (timestamp > 0) {
-            Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
-        } else {
-            // Fallback for the very first attempt if the date wasn't set yet
-            LocalDate.now()
-        }
-    }
-
-    private fun getStartDateKey(attemptNumber: Int) = "start_date_for_attempt_$attemptNumber"
+    // The start date logic is no longer needed from SharedPreferences.
+    // We are removing getStartDateForCurrentAttempt() and related methods.
 
     companion object {
         private const val ATTEMPT_KEY = "current_attempt"

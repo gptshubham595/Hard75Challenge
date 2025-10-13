@@ -86,7 +86,7 @@ fun ChallengeScreen(
     onStartChallenge: () -> Unit,
     onStartNewAttempt: () -> Unit,
     updateTasksForCurrentDay: (List<String>) -> Unit,
-    updateSelfieForCurrentDay: (Context, Bitmap, String?) -> Unit,
+    updateSelfieForCurrentDay: (Bitmap, String?) -> Unit,
     onDismissFailureDialog: () -> Unit,
 ) {
     var showTaskDialog by remember { mutableStateOf(false) }
@@ -218,9 +218,10 @@ fun ChallengeScreen(
             onDismiss = { showTaskDialog = false },
             onFinish = { completedTaskIds ->
                 updateTasksForCurrentDay(completedTaskIds)
+                showTaskDialog = false
             },
             onSelfieTaken = { bitmap, note ->
-                updateSelfieForCurrentDay(context, bitmap, note)
+                updateSelfieForCurrentDay(bitmap, note)
             }
         )
     }
@@ -282,7 +283,7 @@ fun ChallengeScreenPreview_NotStarted() {
         onStartChallenge = {},
         onStartNewAttempt = {},
         updateTasksForCurrentDay = {},
-        updateSelfieForCurrentDay = { _, _, _ -> },
+        updateSelfieForCurrentDay = { _, _ -> },
         onDismissFailureDialog = {}
     )
 }
@@ -322,7 +323,7 @@ fun ChallengeScreenPreview_Active() {
         onStartChallenge = {},
         onStartNewAttempt = {},
         updateTasksForCurrentDay = {},
-        updateSelfieForCurrentDay = { _,_, _ -> },
+        updateSelfieForCurrentDay = { _, _ -> },
         onDismissFailureDialog = {}
     )
 }
@@ -344,7 +345,7 @@ fun ChallengeScreenPreview_Failed() {
         onStartChallenge = {},
         onStartNewAttempt = {},
         updateTasksForCurrentDay = {},
-        updateSelfieForCurrentDay = { _,_, _ -> },
+        updateSelfieForCurrentDay = { _, _ -> },
         onDismissFailureDialog = {}
     )
 }
