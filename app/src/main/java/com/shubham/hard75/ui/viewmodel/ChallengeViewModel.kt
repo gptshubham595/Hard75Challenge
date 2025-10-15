@@ -13,6 +13,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.shubham.hard75.data.db.entities.ChallengeDay
 import com.shubham.hard75.data.db.entities.DayStatus
+import com.shubham.hard75.data.db.entities.DayStatus.Companion.stillHasHope
 import com.shubham.hard75.data.repositories.ChallengeRepository
 import com.shubham.hard75.data.repositories.TaskRepository
 import com.shubham.hard75.model.ChallengeUiState
@@ -97,29 +98,54 @@ class ChallengeViewModel(
         }
     }
 
-    // --- The Core Daily Status Check (New Logic) ---
+    fun isWithinGracePeriod(timestamp: Long): Boolean {
+        // 2-hour grace period in milliseconds
+        val twoHoursInMillis = 2 * 60 * 60 * 1000
+        val gracePeriodEnd = timestamp + twoHoursInMillis
+        return System.currentTimeMillis() < gracePeriodEnd
+    }
+
+    fun LocalDate.isSameDay(lastDayTimeStamp: Long): Boolean {
+        // Convert the timestamp to a calendar date in the user's timezone
+        val lastDayDate = Instant.ofEpochMilli(lastDayTimeStamp)
+            .atZone(ZoneId.systemDefault())
+            .toLocalDate()
+        return this.isEqual(lastDayDate)
+                || (this.isEqual(lastDayDate.plusDays(1))
+                && isWithinGracePeriod(lastDayTimeStamp))
+    }
+
+    fun LocalDate.isNextDay(lastDayTimeStamp: Long): Boolean {
+        val lastDayDate = Instant.ofEpochMilli(lastDayTimeStamp)
+            .atZone(ZoneId.systemDefault())
+            .toLocalDate()
+        return this.isEqual(lastDayDate.plusDays(1)) && !isWithinGracePeriod(lastDayTimeStamp)
+    }
+
+    fun LocalDate.isMoreThanOneDay(lastDayTimeStamp: Long): Boolean {
+        val lastDayDate = Instant.ofEpochMilli(lastDayTimeStamp)
+            .atZone(ZoneId.systemDefault())
+            .toLocalDate()
+        return this.isAfter(lastDayDate.plusDays(1))
+    }
 
     private fun checkDailyStatus() {
         viewModelScope.launch {
             val latestDay = challengeRepository.getLatestUpdatedDay() ?: return@launch
             val lastTimestamp = latestDay.timestamp ?: return@launch
 
-            // Convert the timestamp to a calendar date in the user's timezone
-            val lastDayDate = Instant.ofEpochMilli(lastTimestamp)
-                .atZone(ZoneId.systemDefault())
-                .toLocalDate()
 
             val today = LocalDate.now()
 
             // Case 1: Still the same calendar day.
-            if (today.isEqual(lastDayDate)) {
+            if (today.isSameDay(lastTimestamp)) {
                 _uiState.update { it.copy(currentDayNumber = latestDay.dayNumber) }
                 return@launch
             }
 
             // Case 2: It's the very next day.
-            if (today.isEqual(lastDayDate.plusDays(1))) {
-                if (latestDay.status == DayStatus.COMPLETED) {
+            if (today.isNextDay(lastTimestamp)) {
+                if (latestDay.status.stillHasHope()) {
                     // Success! Unlock the next day.
                     val nextDayNumber = latestDay.dayNumber + 1
                     if (nextDayNumber > 75) return@launch // Challenge finished
@@ -142,9 +168,9 @@ class ChallengeViewModel(
             }
 
             // Case 3: More than one day has passed. You missed a day.
-            if (today.isAfter(lastDayDate.plusDays(1))) {
+            if (today.isMoreThanOneDay(lastTimestamp)) {
                 // Mark the last day as failed for clarity in the calendar
-                if (latestDay.status != DayStatus.COMPLETED) {
+                if (latestDay.status.stillHasHope()) {
                     challengeRepository.upsertDay(latestDay.copy(status = DayStatus.FAILED))
                 }
                 _uiState.update { it.copy(hasFailed = true) }

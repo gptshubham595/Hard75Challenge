@@ -1,7 +1,6 @@
 package com.shubham.hard75.data.db.entities
 
 import androidx.room.Entity
-import androidx.room.PrimaryKey
 import androidx.room.TypeConverters
 import com.shubham.hard75.data.db.converters.StringListConverter
 
@@ -40,9 +39,14 @@ enum class DayStatus {
     IN_PROGRESS, // Some tasks done (Yellow)
     COMPLETED    // All tasks done (Green)
     ;
-    companion object{
+
+    companion object {
         fun getRandomStatus(): DayStatus {
             return entries.toTypedArray().random()
+        }
+
+        fun DayStatus.stillHasHope(): Boolean {
+            return this == IN_PROGRESS || this == COMPLETED
         }
     }
 }
